@@ -5,9 +5,7 @@ def pull_opensf_data(site, endpoint, app_token, api_key_id, api_secret_key):
 
     from sodapy import Socrata
     site = 'data.sfgov.org'
-    app_token = 'uMKWWrv4GsbmHnifvkVHLSUfc'
-    api_key_id = '26qt6l70lxcmk2wurqwc5ppjq'
-    api_secret_key = '4n5ocishb77ot80qswzddsfzy26di1g0dnago4f2ynajjeay58'
+
     # Example authenticated client (needed for non-public datasets):
     client = Socrata(site,
                      app_token,
