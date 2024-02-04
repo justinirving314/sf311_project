@@ -6,4 +6,5 @@ json5 == 0.9.6
 geopy == 2.2.0
 boto3 == 1.21.32
 sodapy == 2.2.0
+python-dotenv == 1.0.1
 

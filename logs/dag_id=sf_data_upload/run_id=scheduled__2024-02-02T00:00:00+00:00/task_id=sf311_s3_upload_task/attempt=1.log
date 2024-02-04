@@ -1,0 +1,42 @@
+[2024-02-03T23:34:33.716+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: sf_data_upload.sf311_s3_upload_task scheduled__2024-02-02T00:00:00+00:00 [queued]>
+[2024-02-03T23:34:33.726+0000] {taskinstance.py:1956} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: sf_data_upload.sf311_s3_upload_task scheduled__2024-02-02T00:00:00+00:00 [queued]>
+[2024-02-03T23:34:33.728+0000] {taskinstance.py:2170} INFO - Starting attempt 1 of 1
+[2024-02-03T23:34:33.738+0000] {taskinstance.py:2191} INFO - Executing <Task(PythonOperator): sf311_s3_upload_task> on 2024-02-02 00:00:00+00:00
+[2024-02-03T23:34:33.745+0000] {standard_task_runner.py:60} INFO - Started process 89 to run task
+[2024-02-03T23:34:33.750+0000] {standard_task_runner.py:87} INFO - Running: ['***', 'tasks', 'run', 'sf_data_upload', 'sf311_s3_upload_task', 'scheduled__2024-02-02T00:00:00+00:00', '--job-id', '35', '--raw', '--subdir', 'DAGS_FOLDER/sf311_data_upload_dag.py', '--cfg-path', '/tmp/tmpdyv_9la7']
+[2024-02-03T23:34:33.754+0000] {standard_task_runner.py:88} INFO - Job 35: Subtask sf311_s3_upload_task
+[2024-02-03T23:34:33.807+0000] {task_command.py:423} INFO - Running <TaskInstance: sf_data_upload.sf311_s3_upload_task scheduled__2024-02-02T00:00:00+00:00 [running]> on host 99c4b1b0af99
+[2024-02-03T23:34:33.915+0000] {taskinstance.py:2480} INFO - Exporting env vars: AIRFLOW_CTX_DAG_OWNER='***' AIRFLOW_CTX_DAG_ID='sf_data_upload' AIRFLOW_CTX_TASK_ID='sf311_s3_upload_task' AIRFLOW_CTX_EXECUTION_DATE='2024-02-02T00:00:00+00:00' AIRFLOW_CTX_TRY_NUMBER='1' AIRFLOW_CTX_DAG_RUN_ID='scheduled__2024-02-02T00:00:00+00:00'
+[2024-02-03T23:34:36.048+0000] {taskinstance.py:2698} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.8/site-packages/airflow/models/taskinstance.py", line 433, in _execute_task
+    result = execute_callable(context=context, **execute_callable_kwargs)
+  File "/home/airflow/.local/lib/python3.8/site-packages/airflow/operators/python.py", line 199, in execute
+    return_value = self.execute_callable()
+  File "/home/airflow/.local/lib/python3.8/site-packages/airflow/operators/python.py", line 216, in execute_callable
+    return self.python_callable(*self.op_args, **self.op_kwargs)
+  File "/opt/airflow/plugins/sf311_s3_upload.py", line 22, in upload_311_s3
+    upload_to_s3(s3_client, df, bucket, int_311_key)
+  File "/opt/airflow/plugins/s3_csv.py", line 16, in upload_to_s3
+    s3_client.put_object(Bucket=bucket, Key = key, Body = csv_buffer.getvalue())
+  File "/home/airflow/.local/lib/python3.8/site-packages/botocore/client.py", line 415, in _api_call
+    return self._make_api_call(operation_name, kwargs)
+  File "/home/airflow/.local/lib/python3.8/site-packages/botocore/client.py", line 715, in _make_api_call
+    request_dict = self._convert_to_request_dict(
+  File "/home/airflow/.local/lib/python3.8/site-packages/botocore/client.py", line 763, in _convert_to_request_dict
+    api_params = self._emit_api_params(
+  File "/home/airflow/.local/lib/python3.8/site-packages/botocore/client.py", line 792, in _emit_api_params
+    self.meta.events.emit(
+  File "/home/airflow/.local/lib/python3.8/site-packages/botocore/hooks.py", line 358, in emit
+    return self._emitter.emit(aliased_event_name, **kwargs)
+  File "/home/airflow/.local/lib/python3.8/site-packages/botocore/hooks.py", line 229, in emit
+    return self._emit(event_name, kwargs)
+  File "/home/airflow/.local/lib/python3.8/site-packages/botocore/hooks.py", line 212, in _emit
+    response = handler(**kwargs)
+  File "/home/airflow/.local/lib/python3.8/site-packages/botocore/handlers.py", line 268, in validate_bucket_name
+    if not VALID_BUCKET.search(bucket) and not VALID_S3_ARN.search(bucket):
+TypeError: expected string or bytes-like object
+[2024-02-03T23:34:36.063+0000] {taskinstance.py:1138} INFO - Marking task as FAILED. dag_id=sf_data_upload, task_id=sf311_s3_upload_task, execution_date=20240202T000000, start_date=20240203T233433, end_date=20240203T233436
+[2024-02-03T23:34:36.072+0000] {standard_task_runner.py:107} ERROR - Failed to execute job 35 for task sf311_s3_upload_task (expected string or bytes-like object; 89)
+[2024-02-03T23:34:36.121+0000] {local_task_job_runner.py:234} INFO - Task exited with return code 1
+[2024-02-03T23:34:36.133+0000] {taskinstance.py:3280} INFO - 0 downstream tasks scheduled from follow-on schedule check

@@ -1,15 +1,49 @@
+import os
+import sys
+# Get the current working directory
+cwd = os.getcwd()
+# Navigate up one level in the directory hierarchy
+parent_dir = os.path.abspath(os.path.join(cwd, '..'))
+relative_path = os.path.join(parent_dir+'/plugins/')
+sys.path.append(relative_path)
+
+from dotenv import load_dotenv
+
+#Credentials loaded from .env file, new users of this notebook must create their own credentials and .env file
+#after cloning the gitrepo
+load_dotenv()
+app_token = os.getenv('APP_TOKEN')
+api_key_id = os.getenv('API_KEY_ID')
+api_secret_key = os.getenv('API_SECRET_KEY')
+aws_access_key = os.getenv('AWS_ACCESS_KEY')
+aws_access_secret_key = os.getenv('AWS_ACCESS_SECRET_KEY')
+bucket = 'jirving-sf311' #os.getenv('S3_BUCKET')
+site = 'data.sfgov.org'
+endpoint = 'vw6y-z8j6'
+
 import json
 import datetime
 from datetime import datetime, timedelta
 import airflow.utils.dates
 from airflow import DAG
 from airflow.operators.python import PythonOperator, BranchPythonOperator
-import sf311_extract
-import sf311_preprocess_1
-import sf311_preprocess_2
-import sf311_s3_upload
+from airflow.models import BaseOperator
+from sf311_extract import pull_opensf_data
+from sf311_preprocess_1 import raw_311_preprocess
+from sf311_preprocess_2 import address_to_coordinates
+from sf311_s3_upload import upload_to_s3_new
+from airflow.hooks.S3_hook import S3Hook
+
 
 SOURCE_FILE_PATH = '/opt/airflow/dags/files'
+
+extract_filter = 'opened >= "2024-01-30"'
+
+def upload_to_s3_hook(df, bucket):
+    s3_hook = S3Hook(aws_conn_id='aws_default')  # Assumes you have configured an AWS connection in Airflow
+    int_311_key = f'int_311_data/{datetime.now():%Y-%m-%d_%H-%M-%S}.csv' #export 
+    csv_string = df.to_csv(index=False)
+    s3_hook.load_string(string_data=csv_string, key=int_311_key, bucket_name=bucket)
 
 sf311_upload_dag = DAG(
     dag_id='sf_data_upload',
@@ -19,30 +53,40 @@ sf311_upload_dag = DAG(
 
 
 # Define the extract_data task
-extract_task = PythonOperator(
-    task_id='sf311_extract',
-    python_callable=sf311_extract,
+sf311_extract_task = PythonOperator(
+    task_id='sf311_extract_task',
+    python_callable=pull_opensf_data,
+    op_kwargs= {'site': site, 
+                     'endpoint' : endpoint, 
+                     'app_token' : app_token,
+                     'api_key_id' : api_key_id,
+                     'api_secret_key' : api_secret_key,
+                     'pulltype':'test'},
     dag=sf311_upload_dag,
 )
 
-clean_task = PythonOperator(
-    task_id='sf311_clean',
-    python_callable=sf311_preprocess_1,
+sf311_clean_task = PythonOperator(
+    task_id='sf311_clean_task',
+    python_callable=raw_311_preprocess,
+    op_kwargs={'df' : sf311_extract_task.output},
     dag=sf311_upload_dag,
 )
 
-add_missing_coord_task = PythonOperator(
-    task_id='sf311_add_coord',
-    python_callable=sf311_preprocess_2,
+sf311_add_coord_task = PythonOperator(
+    task_id='sf311_add_coord_task',
+    python_callable=address_to_coordinates,
+    op_kwargs={'df' : sf311_clean_task.output},
     dag=sf311_upload_dag,
 )
 
-upload_task = PythonOperator(
-    task_id='sf311_s3_upload',
-    python_callable=sf311_s3_upload,
+sf311_s3_upload_task = PythonOperator(
+    task_id='sf311_s3_upload_task',
+    python_callable=upload_to_s3_hook,
+    op_kwargs={'df' : sf311_add_coord_task.output,
+                    'bucket' : bucket
+                    },
     dag=sf311_upload_dag,
 )
 
 #Set the task dependencies
-
-extract_task >> clean_task >> add_missing_coord_task >> upload_task
+sf311_extract_task >> sf311_clean_task >> sf311_add_coord_task >> sf311_s3_upload_task

@@ -1,12 +1,12 @@
 #Use Nominatim to add coordiantes to addresses that were missing them originally from SF 311
 #Some address cannot get coordinates using this method, such as Intersections.
-def address_to_coordinates(ti):
+def address_to_coordinates(df):
     app_name = 'sfpolice_data_app'
     from geopy.geocoders import Nominatim
     from geopy.exc import GeocoderTimedOut   
+    import pandas as pd
     
     geolocator = Nominatim(user_agent=app_name)  # Replace "your_app_name" with a unique name for your application
-    df = ti.xcom_pull(task_ids="sf311_preprocess_1") #xcom_pull is used to pull data from another task
     new_lat = []
     new_long = []
     new_service = []

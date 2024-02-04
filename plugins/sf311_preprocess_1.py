@@ -1,7 +1,7 @@
 #Modify data types of certain columns prior to uploading
-def raw_311_preprocess(ti):
+def raw_311_preprocess(df):
     import pandas as pd
-    raw_311_results = ti.xcom_pull(task_ids="sf311_extract") #xcom_pull is used to pull data from another task
+    raw_311_results = df #xcom_pull is used to pull data from another task
     raw_311_results['service_request_id'] = raw_311_results['service_request_id'].astype(int)
     raw_311_results['requested_datetime'] = pd.to_datetime(raw_311_results['requested_datetime'])
     raw_311_results['updated_datetime'] = pd.to_datetime(raw_311_results['updated_datetime'])
