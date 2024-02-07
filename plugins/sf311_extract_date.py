@@ -56,6 +56,8 @@ def read_all_bucket_hook(access_key, access_secret_key, region, bucket, key):
     try:
         max_date = pd.to_datetime(combined_df['requested_datetime'].drop_duplicates().max())
         max_date = max_date.strftime('%Y-%m-%dT%H:%M:%S')
+    
     except:
         max_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    
     return max_date

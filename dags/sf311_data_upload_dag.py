@@ -5,12 +5,13 @@ cwd = os.getcwd()
 # Navigate up one level in the directory hierarchy
 parent_dir = os.path.abspath(os.path.join(cwd, '..'))
 relative_path = os.path.join(parent_dir+'/plugins/')
+# Add plugins folder for access to functions
 sys.path.append(relative_path)
 
-from dotenv import load_dotenv
 
 #Credentials loaded from .env file, new users of this notebook must create their own credentials and .env file
 #after cloning the gitrepo
+from dotenv import load_dotenv
 load_dotenv()
 app_token = os.getenv('APP_TOKEN')
 api_key_id = os.getenv('API_KEY_ID')
@@ -18,14 +19,17 @@ api_secret_key = os.getenv('API_SECRET_KEY')
 aws_access_key = os.getenv('AWS_ACCESS_KEY')
 aws_access_secret_key = os.getenv('AWS_ACCESS_SECRET_KEY')
 
+# Define some additional variables needed for the pipeline run.
 bucket = 'jirving-sf311' #os.getenv('S3_BUCKET')
-bucket_key = 'int_311_data/'
+bucket_key = 'int_311_data/' #bucket key used for data uploads and reads, where raw csv data from SF 311 is stored
 site = 'data.sfgov.org'
-endpoint = 'vw6y-z8j6'
-geo_endpoint = 'sevw-6tgi'
-df_spatial_txt = 'the_geom'
-region = 'us-west-1'
+endpoint = 'vw6y-z8j6' # 311 data endpoint
+geo_endpoint = 'sevw-6tgi' # neighborhoods with census tract geo endpoint
+df_spatial_txt = 'the_geom' # field name used in geo_endpoint for spatial joins
+region = 'us-west-1' # AWS region but this is not used as S3Hook is being used now (can delete)
+aws_conn_id_local = 'aws_default' #this is the name of the AWS connection configured in your airflow instance that is called in S3 hooks
 
+#Import other libraries used in main DAG code
 import json
 import datetime
 from datetime import datetime, timedelta
@@ -49,27 +53,21 @@ import pandas as pd
 
 SOURCE_FILE_PATH = '/opt/airflow/dags/files'
 
-extract_filter = 'opened >= "2024-01-30"'
-
+# Define function for uploading final dataframe to S3. This can be moved to plugins
 def upload_to_s3_hook(df, bucket):
-    # import pandas as pd
-    # from airflow.hooks.S3_hook import S3Hook
-    # task_instance = kwargs['ti']
-    # df_new = task_instance.xcom_pull(task_ids='sf311_add_neighborhoods_task')
-    s3_hook = S3Hook(aws_conn_id='aws_default')  # Assumes you have configured an AWS connection in Airflow
-    int_311_key = f'int_311_data/{datetime.now():%Y-%m-%d_%H-%M-%S}.csv' #export 
+    s3_hook = S3Hook(aws_conn_id=aws_conn_id_local)  # Assumes you have configured an AWS connection in Airflow
+    int_311_key = f'{bucket_key}{datetime.now():%Y-%m-%d_%H-%M-%S}.csv' #export 
     csv_string = df.to_csv(index=False)
     s3_hook.load_string(string_data=csv_string, key=int_311_key, bucket_name=bucket)
 
-
-
+# Define DAG instance with name and default run
 sf311_upload_dag = DAG(
     dag_id='sf_data_upload',
     start_date=airflow.utils.dates.days_ago(1),
     tags=["data_pipeline"]
 )
 
-
+# Define task to check the latest date in the S3 bucket and save that value for use in the next task
 s3_extract_last_task = PythonOperator(
     task_id='s3_extract_last_task',
     python_callable=read_all_bucket_hook,
@@ -81,7 +79,8 @@ s3_extract_last_task = PythonOperator(
     dag=sf311_upload_dag,
 )
 
-# Define the extract_data task
+
+# Define task to extract data from the SF311 data source
 sf311_extract_task = PythonOperator(
     task_id='sf311_extract_task',
     python_callable=pull_opensf_data,
@@ -95,6 +94,7 @@ sf311_extract_task = PythonOperator(
     dag=sf311_upload_dag,
 )
 
+# Define task to clean extracted data
 sf311_clean_task = PythonOperator(
     task_id='sf311_clean_task',
     python_callable=raw_311_preprocess,
@@ -102,8 +102,7 @@ sf311_clean_task = PythonOperator(
     dag=sf311_upload_dag,
 )
 
-
-
+# Define task to add coordinates to address that have a street address but are missing coordinates for no apparent reason
 sf311_add_coord_task = PythonOperator(
     task_id='sf311_add_coord_task',
     python_callable=address_to_coordinates,
@@ -111,8 +110,7 @@ sf311_add_coord_task = PythonOperator(
     dag=sf311_upload_dag,
 )
 
-
-
+# Define task to spatially join complaints with neighborhoods/tracts
 sf311_add_neighborhoods_task = PythonOperator(
     task_id='sf311_add_neighborhoods_task',
     python_callable=add_tracts,
@@ -126,8 +124,7 @@ sf311_add_neighborhoods_task = PythonOperator(
     dag=sf311_upload_dag,
 )
 
-
-
+# Define task to upload final dataframe of results to S3 bucket
 sf311_s3_upload_task = PythonOperator(
     task_id='sf311_s3_upload_task',
     python_callable=upload_to_s3_hook,
