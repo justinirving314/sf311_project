@@ -19,10 +19,12 @@ aws_access_key = os.getenv('AWS_ACCESS_KEY')
 aws_access_secret_key = os.getenv('AWS_ACCESS_SECRET_KEY')
 
 bucket = 'jirving-sf311' #os.getenv('S3_BUCKET')
+bucket_key = 'int_311_data/'
 site = 'data.sfgov.org'
 endpoint = 'vw6y-z8j6'
 geo_endpoint = 'sevw-6tgi'
 df_spatial_txt = 'the_geom'
+region = 'us-west-1'
 
 import json
 import datetime
@@ -37,7 +39,9 @@ from sf311_preprocess_1 import raw_311_preprocess
 from sf311_preprocess_2 import address_to_coordinates
 from sf311_preprocess_2 import add_tracts
 from sf311_s3_upload import upload_to_s3_new
+from sf311_extract_date import read_all_bucket
 from airflow.hooks.S3_hook import S3Hook
+from sf311_extract_date import read_all_bucket_hook
 import pickle
 import pandas as pd
 
@@ -66,6 +70,17 @@ sf311_upload_dag = DAG(
 )
 
 
+s3_extract_last_task = PythonOperator(
+    task_id='s3_extract_last_task',
+    python_callable=read_all_bucket_hook,
+    op_kwargs= {'access_key': aws_access_key, 
+                     'access_secret_key' : aws_access_secret_key, 
+                     'region' : region,
+                     'bucket' : bucket,
+                     'key' : bucket_key},
+    dag=sf311_upload_dag,
+)
+
 # Define the extract_data task
 sf311_extract_task = PythonOperator(
     task_id='sf311_extract_task',
@@ -75,7 +90,8 @@ sf311_extract_task = PythonOperator(
                      'app_token' : app_token,
                      'api_key_id' : api_key_id,
                      'api_secret_key' : api_secret_key,
-                     'pulltype':'test'},
+                     'pulltype':'test',
+                     'filters': (f"requested_datetime >= '{s3_extract_last_task.output}'")},
     dag=sf311_upload_dag,
 )
 
@@ -86,12 +102,16 @@ sf311_clean_task = PythonOperator(
     dag=sf311_upload_dag,
 )
 
+
+
 sf311_add_coord_task = PythonOperator(
     task_id='sf311_add_coord_task',
     python_callable=address_to_coordinates,
     op_kwargs={'df' : sf311_clean_task.output},
     dag=sf311_upload_dag,
 )
+
+
 
 sf311_add_neighborhoods_task = PythonOperator(
     task_id='sf311_add_neighborhoods_task',
@@ -106,6 +126,8 @@ sf311_add_neighborhoods_task = PythonOperator(
     dag=sf311_upload_dag,
 )
 
+
+
 sf311_s3_upload_task = PythonOperator(
     task_id='sf311_s3_upload_task',
     python_callable=upload_to_s3_hook,
@@ -117,4 +139,4 @@ sf311_s3_upload_task = PythonOperator(
 )
 
 #Set the task dependencies
-sf311_extract_task >> sf311_clean_task >> sf311_add_coord_task >> sf311_add_neighborhoods_task >> sf311_s3_upload_task
+s3_extract_last_task >> sf311_extract_task >> sf311_clean_task >> sf311_add_coord_task >> sf311_add_neighborhoods_task >> sf311_s3_upload_task
