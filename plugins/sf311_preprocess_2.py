@@ -51,3 +51,58 @@ def address_to_coordinates(df):
     merged_df = merged_df.drop(['lat_original', 'lat_new','long_original', 'long_new'], axis=1)
     
     return merged_df
+
+
+def shape_extract(x):
+    from shapely.geometry import shape
+    from shapely.geometry import Point
+    try:
+        # Code that may raise an exception
+        return shape(x)
+    except Exception as e:
+        return None
+
+
+def add_tracts(df, 
+                df_spatial_txt, 
+                site,
+                geo_endpoint,
+                app_token, 
+                api_key_id, 
+                api_secret_key):
+    #Spatially join fire incidents points with parcel polygons to add parcel data
+    from sf311_extract import pull_opensf_data
+    from sf311_preprocess_2 import shape_extract
+    import geopandas as gpd
+    import pandas as pd
+    from shapely.geometry import shape
+    from shapely.geometry import Point
+    import numpy as np
+    import pickle
+    import json
+    from airflow.models import TaskInstance
+
+    geodf = gpd.GeoDataFrame(df,
+                            geometry=gpd.points_from_xy(df.long, 
+                                                            df.lat,
+                                                            crs='EPSG:4326'))
+        
+    pulltype = 'all'
+    print('App_token: '+str(app_token))
+    parcels_df = pull_opensf_data(site, 
+                     geo_endpoint, 
+                     app_token, 
+                     api_key_id, 
+                     api_secret_key,
+                     pulltype)
+
+    parcels_df['geometry'] = parcels_df[df_spatial_txt].apply(shape_extract)
+    parcels_geodf = gpd.GeoDataFrame(parcels_df, crs='EPSG:4326')
+    joined_geo_df = gpd.sjoin(geodf, parcels_geodf, how="left", predicate='within')
+    # Assuming 'df' is your DataFrame
+    df_json = pd.DataFrame(joined_geo_df.drop('geometry',axis=1)\
+                           [['service_request_id','tractce','name','neighborhoods_analysis_boundaries']])
+
+    df_final = pd.merge(df,df_json,on='service_request_id',how='left')
+
+    return df_final
