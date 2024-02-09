@@ -43,11 +43,14 @@ from sf311_preprocess_1 import raw_311_preprocess
 from sf311_preprocess_2 import address_to_coordinates
 from sf311_preprocess_2 import add_tracts
 from sf311_s3_upload import upload_to_s3_new
-from sf311_extract_date import read_all_bucket
 from airflow.hooks.S3_hook import S3Hook
 from sf311_extract_date import read_all_bucket_hook
 import pickle
 import pandas as pd
+import io
+import pyarrow as pa
+import pyarrow.parquet as pq
+import base64
 
 
 
@@ -56,9 +59,15 @@ SOURCE_FILE_PATH = '/opt/airflow/dags/files'
 # Define function for uploading final dataframe to S3. This can be moved to plugins
 def upload_to_s3_hook(df, bucket):
     s3_hook = S3Hook(aws_conn_id=aws_conn_id_local)  # Assumes you have configured an AWS connection in Airflow
-    int_311_key = f'{bucket_key}{datetime.now():%Y-%m-%d_%H-%M-%S}.csv' #export 
-    csv_string = df.to_csv(index=False)
-    s3_hook.load_string(string_data=csv_string, key=int_311_key, bucket_name=bucket)
+    # int_311_key = f'{bucket_key}{datetime.now():%Y-%m-%d_%H-%M-%S}.csv' #export 
+    int_311_key = f'{bucket_key}{datetime.now():%Y-%m-%d_%H-%M-%S}.parquet'
+    parquet_buffer = io.BytesIO()
+    df_pa = pa.Table.from_pandas(df)
+    parquet_buffer = pa.BufferOutputStream()
+    pq.write_table(df_pa, parquet_buffer)
+    # csv_string = df.to_csv(index=False)
+    s3_hook.load_bytes(bytes_data=parquet_buffer.getvalue().to_pybytes(), key=int_311_key, bucket_name=bucket)
+    
 
 # Define DAG instance with name and default run
 sf311_upload_dag = DAG(
@@ -79,7 +88,7 @@ s3_extract_last_task = PythonOperator(
     dag=sf311_upload_dag,
 )
 
-
+#old filter to be restored: (f"requested_datetime >= '{s3_extract_last_task.output}'")
 # Define task to extract data from the SF311 data source
 sf311_extract_task = PythonOperator(
     task_id='sf311_extract_task',
@@ -89,7 +98,7 @@ sf311_extract_task = PythonOperator(
                      'app_token' : app_token,
                      'api_key_id' : api_key_id,
                      'api_secret_key' : api_secret_key,
-                     'pulltype':'test',
+                     'pulltype':'all',
                      'filters': (f"requested_datetime >= '{s3_extract_last_task.output}'")},
     dag=sf311_upload_dag,
 )
