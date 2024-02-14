@@ -9,3 +9,4 @@ sodapy == 2.2.0
 python-dotenv == 1.0.1
 geopandas == 0.13.1
 apache-airflow-providers-amazon==8.17.0
+SQLAlchemy==1.4.32
