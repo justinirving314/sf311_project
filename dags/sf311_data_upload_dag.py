@@ -18,6 +18,7 @@ api_key_id = os.getenv('API_KEY_ID')
 api_secret_key = os.getenv('API_SECRET_KEY')
 aws_access_key = os.getenv('AWS_ACCESS_KEY')
 aws_access_secret_key = os.getenv('AWS_ACCESS_SECRET_KEY')
+crawler_name = 'sfdata_311_s3_glue_crawler'
 
 # Define some additional variables needed for the pipeline run.
 bucket = 'jirving-sf311' #os.getenv('S3_BUCKET')
@@ -51,10 +52,14 @@ import io
 import pyarrow as pa
 import pyarrow.parquet as pq
 import base64
+import boto3
+from airflow.providers.amazon.aws.hooks.glue_crawler import GlueCrawlerHook
+
 
 
 
 SOURCE_FILE_PATH = '/opt/airflow/dags/files'
+
 
 # Define function for uploading final dataframe to S3. This can be moved to plugins
 def upload_to_s3_hook(df, bucket):
@@ -68,6 +73,23 @@ def upload_to_s3_hook(df, bucket):
     # csv_string = df.to_csv(index=False)
     s3_hook.load_bytes(bytes_data=parquet_buffer.getvalue().to_pybytes(), key=int_311_key, bucket_name=bucket)
     
+def trigger_crawler(aws_key_id, aws_secret_key, region, crawler_name):
+    glue_client = boto3.client("glue", 
+                  aws_access_key_id = aws_key_id, 
+                  aws_secret_access_key = aws_secret_key,
+                  region_name = region,
+                  verify=False)
+    #trigger crawler
+    response = glue_client.start_crawler(Name = crawler_name)
+
+def trigger_glue_crawler(aws_local_conn_id, crawler_name, region):
+    # Initialize GlueCrawlerHook
+    glue_hook = GlueCrawlerHook(aws_conn_id=aws_local_conn_id, region_name = region)
+
+    # Trigger the Glue crawler
+    response = glue_hook.start_crawler(crawler_name)
+
+
 
 # Define DAG instance with name and default run
 sf311_upload_dag = DAG(
@@ -144,5 +166,24 @@ sf311_s3_upload_task = PythonOperator(
     dag=sf311_upload_dag,
 )
 
+# Define Glue crawler operator
+glue_crawler_operator = PythonOperator(
+    task_id='run_glue_crawler',
+    python_callable=trigger_glue_crawler,
+     op_kwargs={'aws_local_conn_id' : aws_conn_id_local,
+                    'crawler_name':crawler_name,
+                    'region': region
+                    },
+    dag=sf311_upload_dag,
+)
+
+# Define Glue crawler operator
+# glue_crawler_operator = GlueCrawlerHook(
+#     task_id='run_glue_crawler',
+#     aws_conn_id=aws_conn_id_local,  # AWS connection ID configured in Airflow
+#     crawler_name=crawler_name,  # Name of your Glue crawler
+#     dag=sf311_upload_dag,
+# )
+
 #Set the task dependencies
-s3_extract_last_task >> sf311_extract_task >> sf311_clean_task >> sf311_add_coord_task >> sf311_add_neighborhoods_task >> sf311_s3_upload_task
+s3_extract_last_task >> sf311_extract_task >> sf311_clean_task >> sf311_add_coord_task >> sf311_add_neighborhoods_task >> sf311_s3_upload_task >> glue_crawler_operator

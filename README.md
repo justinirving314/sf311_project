@@ -7,7 +7,7 @@ Data from the following sources will be used to train our model and provide fore
 3. Twitter
 4. Neighborhood and census boundaries
 # Architecture
-- Data Storage: Amazon Web Services (S3 and Redshift)
-- Pipeline orchestration: Airflow
-- Data Transformations: Python, SQL (coupled with dbt Core)
+- Data Storage: Amazon Web Services (S3, AWS Glue, Postgres Running on EC2 Instance)
+- Pipeline orchestration: Airflow, dbt
+- Data Transformations: Python, SQL (coupled with dbt)
 - TDB: forecasting algorithm deployment, dashboarding, notifications

@@ -1,3 +1,4 @@
 .env
 docker-compose.yaml
 logs
+sfdata_311.pem
