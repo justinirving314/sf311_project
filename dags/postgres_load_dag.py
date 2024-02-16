@@ -4,9 +4,11 @@ import sys
 cwd = os.getcwd()
 # Navigate up one level in the directory hierarchy
 parent_dir = os.path.abspath(os.path.join(cwd, '..'))
+working_dir = os.getcwd()
 relative_path = os.path.join(parent_dir+'/plugins/')
 # Add plugins folder for access to functions
 sys.path.append(relative_path)
+sys.path.append(parent_dir)
 
 
 #Credentials loaded from .env file, new users of this notebook must create their own credentials and .env file
@@ -16,6 +18,8 @@ load_dotenv()
 pg_hostname = os.getenv('POSTGRES_HOST')
 pg_userid = os.getenv('AIRFLOW_USER')
 pg_pw = os.getenv('AIRFLOW_PW')
+aws_access_key = os.getenv('AWS_ACCESS_KEY')
+aws_access_secret_key = os.getenv('AWS_ACCESS_SECRET_KEY')
 
 #Import other libraries used in main DAG code
 import json
@@ -35,7 +39,7 @@ import pyarrow.parquet as pq
 import base64
 import boto3
 from sqlalchemy import create_engine, text
-from postgres_upload import pull_glue_table
+from postgres_upload import pull_glue_table_boto
 
 SOURCE_FILE_PATH = '/opt/airflow/dags/files'
 
@@ -45,22 +49,29 @@ aws_conn_id_local = 'aws_default' #this is the name of the AWS connection config
 s3_output_path = 's3://jirving-sf311/athena_query_output/'
 glue_table = 'int_311_data'
 glue_db_name = 'sfdata311_s3_glue_database'
+region = 'us-west-1' # AWS region but this is not used as S3Hook is being used now (can delete)
 
 def pull_latest_date(pg_user, pg_pw, pg_host, db_name, table_name):
+    load_dotenv()
+    pg_hostname = os.getenv('POSTGRES_HOST')
+    pg_userid = os.getenv('AIRFLOW_USER')
+    pg_pw = os.getenv('AIRFLOW_PW')
     # Set up the database connection URL
-    db_url = f'postgresql://{pg_user}:{pg_pw}@{pg_host}:5432/{db_name}'
+    db_url = f'postgresql://{pg_userid}:{pg_pw}@{pg_hostname}:5432/{db_name}'
+    print(working_dir)
+    print(db_url)
 
     # Create a SQLAlchemy engine
     engine = create_engine(db_url)
 
-    query = f"SELECT MAX(requested_datetime) FROM {table_name}"
+    query = f"SELECT MAX(service_request_id) FROM {table_name}"
 
     with engine.connect() as connection:
         result = connection.execute(text(query))
         row = result.fetchone()  # Retrieve the single row
 
-    latest_datetime = pd.to_datetime(row[0]).strftime(format = '%Y-%m-%d %H:%M:%S')
-    return latest_datetime
+    latest_request = row[0]
+    return latest_request
 
 
 def upload_to_pg(pg_user, pg_pw, pg_host, db_name, result_df):
@@ -96,12 +107,15 @@ pg_pull_latest = PythonOperator(
 # Define task to pull latest data from glue catalogue database
 glue_table_pull = PythonOperator(
     task_id='pull_glue_table',
-    python_callable=pull_glue_table,
-    op_kwargs= {'aws_local_conn_id': aws_conn_id_local, 
-                     'glue_database' : glue_db_name, 
-                     'glue_table' : glue_table,
-                     's3_output_path' : s3_output_path,
-                     'max_date' : pg_pull_latest.output},
+    python_callable=pull_glue_table_boto,
+    op_kwargs =         {'aws_access_key':aws_access_key,
+                         'aws_access_secret_key':aws_access_secret_key,
+                         'region': region,
+                         'glue_table':glue_table,
+                         'glue_db_name':glue_db_name,
+                         's3_output':s3_output_path,
+                         'max_request':pg_pull_latest.output},
+
     dag=postgres_upload_dag,
 )
 
