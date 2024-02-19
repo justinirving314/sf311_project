@@ -40,6 +40,11 @@ import base64
 import boto3
 from sqlalchemy import create_engine, text
 from postgres_upload import pull_glue_table_boto
+from postgres_upload import check_max_date
+from airflow.sensors.external_task import ExternalTaskSensor
+from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+from airflow.providers.amazon.aws.sensors.glue_catalog_partition import GlueCatalogPartitionSensor
+from airflow.contrib.sensors.aws_glue_catalog_partition_sensor import AwsGlueCatalogPartitionSensor
 
 SOURCE_FILE_PATH = '/opt/airflow/dags/files'
 
@@ -50,6 +55,8 @@ s3_output_path = 's3://jirving-sf311/athena_query_output/'
 glue_table = 'int_311_data'
 glue_db_name = 'sfdata311_s3_glue_database'
 region = 'us-west-1' # AWS region but this is not used as S3Hook is being used now (can delete)
+
+
 
 def pull_latest_date(pg_user, pg_pw, pg_host, db_name, table_name):
     load_dotenv()
@@ -88,9 +95,22 @@ def upload_to_pg(pg_user, pg_pw, pg_host, db_name, result_df):
 # Define DAG instance with name and default run
 postgres_upload_dag = DAG(
     dag_id='postgres_upload_dag',
+    schedule_interval=timedelta(minutes=120),
     start_date=airflow.utils.dates.days_ago(1),
     tags=["postgres_upload"]
 )
+
+
+# trigger_second_dag = TriggerDagRunOperator(
+#     task_id='trigger_target_dag',
+#     trigger_dag_id='sf_data_upload',
+#     wait_for_completion=True,
+#     # Optionally set run_id, execution_date, etc.
+#     # run_id='some_unique_identifier',
+#     # execution_date=datetime(2024, 2, 18),
+#     dag=postgres_upload_dag
+#     )
+
 
 # Define task to pull latest date from existing postgres db
 pg_pull_latest = PythonOperator(
@@ -101,6 +121,32 @@ pg_pull_latest = PythonOperator(
                      'pg_host' : pg_hostname,
                      'db_name' : db_name,
                      'table_name' : table_name},
+    dag=postgres_upload_dag,
+)
+
+# athena_wait_for_partition = AwsGlueCatalogPartitionSensor(
+#     task_id='athena_wait_for_partition',
+#     aws_conn_id = aws_conn_id_local,
+#     #region_name = region,
+#     database_name=glue_db_name,
+#     poke_interval=60*5,
+#     table_name=glue_table,
+#     expression=f'service_request_id > {pg_pull_latest.output}',
+#     #deferrable = True,
+#     dag=postgres_upload_dag,
+# )
+
+check_max_serviceid = PythonOperator(
+    task_id='check_max_serviceid',
+    python_callable=check_max_date,
+    op_kwargs =         {'aws_access_key':aws_access_key,
+                         'aws_access_secret_key':aws_access_secret_key,
+                         'region': region,
+                         'glue_table':glue_table,
+                         'glue_db_name':glue_db_name,
+                         's3_output':s3_output_path,
+                         'max_request':pg_pull_latest.output},
+
     dag=postgres_upload_dag,
 )
 
@@ -131,4 +177,4 @@ upload_pg = PythonOperator(
     dag=postgres_upload_dag,
 )
 
-pg_pull_latest >> glue_table_pull >> upload_pg
+pg_pull_latest >> check_max_serviceid >> glue_table_pull >> upload_pg

@@ -106,3 +106,68 @@ def pull_glue_table_boto(aws_access_key,
     # Concatenate data from all batches into a single DataFrame
     result_df = pd.concat(all_data, ignore_index=True)
     return result_df
+
+def check_max_date(aws_access_key, 
+                         aws_access_secret_key,
+                         region,
+                         glue_table,
+                         glue_db_name,
+                         s3_output,
+                         max_request):
+    import time
+    import boto3
+    import pandas as pd
+    from pyathena import connect
+
+    athena_client = boto3.client("athena", 
+                    aws_access_key_id = aws_access_key, 
+                    aws_secret_access_key = aws_access_secret_key,
+                    region_name = region,
+                    verify=False)
+    df = pd.DataFrame()
+    query = f"""
+            SELECT *
+            FROM {glue_table}
+            WHERE service_request_id > {max_request};
+        """
+    
+    query_execution = athena_client.start_query_execution(
+            QueryString=query,
+            QueryExecutionContext={'Database': glue_db_name},  # Specify your Glue database
+            ResultConfiguration={'OutputLocation': s3_output},  # Specify S3 bucket for query results
+        )
+    
+    query_execution_id = query_execution['QueryExecutionId']
+    # Poll for the status of the query execution
+    while True:
+        query_status = athena_client.get_query_execution(QueryExecutionId=query_execution_id)['QueryExecution']['Status']['State']
+        if query_status in ['SUCCEEDED', 'FAILED', 'CANCELLED']:
+            break
+        time.sleep(1)  # Wait for 1 second before polling again
+        
+        # Get query results
+    query_results = athena_client.get_query_results(QueryExecutionId=query_execution_id)
+        
+    column_name = []
+    column_names = [col['Label'] for col in query_results['ResultSet']['ResultSetMetadata']['ColumnInfo']]
+        
+    rows = []
+        
+    for row in query_results['ResultSet']['Rows'][1:]:
+        # Handle different data types (e.g., VarChar, Integer, etc.)
+        row_data = []
+        for data in row['Data']:
+            if 'VarCharValue' in data:
+                row_data.append(data['VarCharValue'])
+            elif 'BigIntValue' in data:
+                row_data.append(int(data['BigIntValue']))
+            # Add conditions for other data types as needed
+            else:
+                row_data.append(None)  # Handle unsupported data types
+            
+            rows.append(row_data)
+        
+        # Convert data to DataFrame
+    df = pd.DataFrame(rows, columns=column_names)
+
+    return df

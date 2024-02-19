@@ -73,14 +73,7 @@ def upload_to_s3_hook(df, bucket):
     # csv_string = df.to_csv(index=False)
     s3_hook.load_bytes(bytes_data=parquet_buffer.getvalue().to_pybytes(), key=int_311_key, bucket_name=bucket)
     
-def trigger_crawler(aws_key_id, aws_secret_key, region, crawler_name):
-    glue_client = boto3.client("glue", 
-                  aws_access_key_id = aws_key_id, 
-                  aws_secret_access_key = aws_secret_key,
-                  region_name = region,
-                  verify=False)
-    #trigger crawler
-    response = glue_client.start_crawler(Name = crawler_name)
+
 
 def trigger_glue_crawler(aws_local_conn_id, crawler_name, region):
     # Initialize GlueCrawlerHook
@@ -94,6 +87,7 @@ def trigger_glue_crawler(aws_local_conn_id, crawler_name, region):
 # Define DAG instance with name and default run
 sf311_upload_dag = DAG(
     dag_id='sf_data_upload',
+    schedule_interval=timedelta(days=1),
     start_date=airflow.utils.dates.days_ago(1),
     tags=["data_pipeline"]
 )
