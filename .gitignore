@@ -1,4 +1,7 @@
 .env
 docker-compose.yaml
-logs
+logs/
 sfdata_311.pem
+dbt-env/
+.vscode/
+dbt_packages/
