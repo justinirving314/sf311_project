@@ -1,6 +1,5 @@
 import os
 import sys
-# from cosmos import DbtRunOperator
 # Get the current working directory
 cwd = os.getcwd()
 # Navigate up one level in the directory hierarchy
@@ -32,21 +31,22 @@ from airflow.operators.python import PythonOperator, BranchPythonOperator
 from airflow.operators.bash import BashOperator
 from airflow.models import BaseOperator
 from airflow.models import TaskInstance
-from airflow.hooks.S3_hook import S3Hook
-import pickle
 import pandas as pd
-import io
-import pyarrow as pa
-import pyarrow.parquet as pq
-import base64
-import boto3
+
+
 
 SOURCE_FILE_PATH = '/opt/airflow/dags/files'
+
+#Location of DBT project
 PATH_TO_DBT_PROJECT = '/opt/airflow/dags/dbt/dbt_311'
+
+#Location of python virtual environment containing dbt and dbt-postgres. Installed in Docker image based on Dockerfile
 PATH_TO_DBT_VENV = '/opt/dbt_env/bin/activate'
-print_dir = "ls"
+
+#Breaking out dbt run commands for the different model portions. Need to call the dbt venv to run
 dbt_command_staging = "source $PATH_TO_DBT_VENV && dbt run --models stg_sf311"
 dbt_command_marts = "source $PATH_TO_DBT_VENV && dbt run --models daily_by_geo daily_total"
+
 # Create the DAG with the specified schedule interval
 dbt_daily_dag = DAG(
         dag_id = 'dbt_daily_dag', 
@@ -54,7 +54,7 @@ dbt_daily_dag = DAG(
         start_date=airflow.utils.dates.days_ago(1),
         tags=["dbt_pipeline"])
 
-# Define dbt tasks using BashOperator
+# Run dbt staging models using the BashOperator
 dbt_staging = BashOperator(
     task_id='dbt_staging',
     bash_command=dbt_command_staging,
@@ -62,6 +62,8 @@ dbt_staging = BashOperator(
     cwd = PATH_TO_DBT_PROJECT,
     dag=dbt_daily_dag
 )
+
+# Run dbt marts models using the BashOperator
 dbt_mart = BashOperator(
     task_id='dbt_mart',
     bash_command=dbt_command_marts,
@@ -69,24 +71,6 @@ dbt_mart = BashOperator(
     cwd = PATH_TO_DBT_PROJECT,
     dag=dbt_daily_dag
 )
-# Set task dependencies
 
-# dbt_staging = DbtRunOperator(
-#     task_id='dbt_staging',
-#     dbt_command='run',  # Specify the dbt command to run
-#     dbt_environment='production',  # Specify the dbt environment
-#     dbt_profiles_dir='/dbt_311/dbt_311/',  # Specify the path to the dbt profiles directory
-#     models = ['stg_sf311'],
-#     dag=dbt_daily_dag,
-# )
-
-# dbt_mart = DbtRunOperator(
-#     task_id='dbt_mart',
-#     dbt_command='run',  # Specify the dbt command to run
-#     dbt_environment='production',  # Specify the dbt environment
-#     dbt_profiles_dir='/dbt_311/dbt_311/',  # Specify the path to the dbt profiles directory
-#     models = ['daily_by_geo','daily_total','weekly_by_geo'],
-#     dag=dbt_daily_dag,
-# )
 
 dbt_staging >> dbt_mart

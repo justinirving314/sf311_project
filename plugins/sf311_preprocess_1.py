@@ -1,6 +1,20 @@
 #Modify data types of certain columns prior to uploading
 def raw_311_preprocess(df):
     import pandas as pd
+
+    """
+    Description:
+        The purpose of this function is to change data types for specific columns returned by the SFData API
+        and return a datagrame of preprocessed results.
+
+    Inputs: 
+        df: pandas dataframe containing raw results from SFData API.
+
+    Outputs:
+        int_311_results: a pandas dataframe of pre-processed results from SFData API
+
+    """
+
     raw_311_results = df #xcom_pull is used to pull data from another task
     raw_311_results['service_request_id'] = raw_311_results['service_request_id'].astype(int)
     raw_311_results['requested_datetime'] = pd.to_datetime(raw_311_results['requested_datetime'])
