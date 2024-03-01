@@ -5,19 +5,26 @@ def pull_opensf_data(site,
                      api_secret_key,
                      pulltype,
                      filters = None):
-    """
-        Arguments: 
-            site: sf data website
-            app_token: app_token created during set-up. 
-            api_key_id: api key id created during set-up
-            api_secret_key: secret api key created during set-up
-
-        Results:
-            all_records: a pandas dataframe of all records returned by the API pulls
-
-    """
+    
     import pandas as pd
     from sodapy import Socrata
+
+    """
+    Description:
+        The purpose of this function is to pull all available 311 data from the SFData API using the date
+        filter passed by the extractn date function.
+
+    Inputs: 
+        site: sf data website
+        app_token: app_token created during set-up. 
+        api_key_id: api key id created during set-up
+        api_secret_key: secret api key created during set-up
+
+    Outputs:
+        all_records: a pandas dataframe of all records returned by the API pulls
+
+    """
+
 
     #set limit and offset and create empty dataframe
     all_records = pd.DataFrame()

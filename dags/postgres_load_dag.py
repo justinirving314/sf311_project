@@ -58,7 +58,7 @@ region = 'us-west-1' # AWS region but this is not used as S3Hook is being used n
 
 
 
-def pull_latest_date(pg_user, pg_pw, pg_host, db_name, table_name):
+def pull_latest_request(pg_user, pg_pw, pg_host, db_name, table_name):
     load_dotenv()
     pg_hostname = os.getenv('POSTGRES_HOST')
     pg_userid = os.getenv('AIRFLOW_USER')
@@ -78,6 +78,7 @@ def pull_latest_date(pg_user, pg_pw, pg_host, db_name, table_name):
         row = result.fetchone()  # Retrieve the single row
 
     latest_request = row[0]
+    print(latest_request)
     return latest_request
 
 
@@ -97,7 +98,7 @@ postgres_upload_dag = DAG(
     dag_id='postgres_upload_dag',
     schedule_interval=timedelta(minutes=120),
     start_date=airflow.utils.dates.days_ago(1),
-    tags=["postgres_upload"]
+    tags=["postgres_upload"],
 )
 
 
@@ -112,10 +113,10 @@ postgres_upload_dag = DAG(
 #     )
 
 
-# Define task to pull latest date from existing postgres db
+# Define task to pull latest service request id from existing postgres db
 pg_pull_latest = PythonOperator(
     task_id='pg_pull_latest',
-    python_callable=pull_latest_date,
+    python_callable=pull_latest_request,
     op_kwargs= {'pg_user': pg_userid, 
                      'pg_pw' : pg_pw, 
                      'pg_host' : pg_hostname,
@@ -136,19 +137,19 @@ pg_pull_latest = PythonOperator(
 #     dag=postgres_upload_dag,
 # )
 
-check_max_serviceid = PythonOperator(
-    task_id='check_max_serviceid',
-    python_callable=check_max_date,
-    op_kwargs =         {'aws_access_key':aws_access_key,
-                         'aws_access_secret_key':aws_access_secret_key,
-                         'region': region,
-                         'glue_table':glue_table,
-                         'glue_db_name':glue_db_name,
-                         's3_output':s3_output_path,
-                         'max_request':pg_pull_latest.output},
+# check_max_serviceid = PythonOperator(
+#     task_id='check_max_serviceid',
+#     python_callable=check_max_date,
+#     op_kwargs =         {'aws_access_key':aws_access_key,
+#                          'aws_access_secret_key':aws_access_secret_key,
+#                          'region': region,
+#                          'glue_table':glue_table,
+#                          'glue_db_name':glue_db_name,
+#                          's3_output':s3_output_path,
+#                          'max_request':pg_pull_latest.output},
 
-    dag=postgres_upload_dag,
-)
+#     dag=postgres_upload_dag,
+# )
 
 # Define task to pull latest data from glue catalogue database
 glue_table_pull = PythonOperator(
@@ -177,4 +178,4 @@ upload_pg = PythonOperator(
     dag=postgres_upload_dag,
 )
 
-pg_pull_latest >> check_max_serviceid >> glue_table_pull >> upload_pg
+pg_pull_latest >> glue_table_pull >> upload_pg

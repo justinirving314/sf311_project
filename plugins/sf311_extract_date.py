@@ -1,32 +1,3 @@
-# def read_all_bucket(access_key, access_secret_key, region, bucket, key):
-#     import boto3
-#     import io
-#     import pandas as pd
-
-#     s3_client = boto3.client("s3", 
-#                   aws_access_key_id = access_key, 
-#                   aws_secret_access_key = access_secret_key,
-#                   region_name = region,
-#                   use_ssl=False)
-#     objects = s3_client.list_objects(Bucket=bucket, Prefix = key)
-#     df_comb = pd.DataFrame()
-#     # Iterate over the objects and read them
-#     for object_1 in objects['Contents']:
-#         key_test = object_1['Key']
-#         if key_test.endswith('.csv'):
-#             s3_file = s3_client.get_object(Bucket = bucket, Key = key)
-#             df = pd.read_csv(io.StringIO(s3_file['Body'].read().decode('utf-8')))
-#             df_comb = pd.concat([df_comb,df], axis=1)
-#         else:
-#             continue
-    
-#     try:
-#         max_date = pd.to_datetime(df_comb['requested_datetime'].drop_duplicates().max())
-#         max_date = max_date.strftime('%Y-%m-%dT%H:%M:%S')
-#     except:
-#         max_date = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
-#     return max_date
-
 def read_all_bucket_hook(access_key, access_secret_key, region, bucket, key):
     import boto3
     import io
@@ -35,7 +6,22 @@ def read_all_bucket_hook(access_key, access_secret_key, region, bucket, key):
     from datetime import datetime
     import pyarrow.parquet as pq
 
- # Initialize the S3Hook
+
+    """
+    Description: 
+        The purpose of this function is to check all parquet files in the S3 bucket and determine the most
+        recent date. This will then be used to limit the date range pulled from the SFData API to speed up the query
+        and avoid duplication of results in our data warehouse.
+    Inputs: 
+        bucket: S3 bucket name where parquet files are stored
+        key: S3 bucket subfolder where parquet files are stored
+
+    Outputs:
+        max_date: a datetime string
+    
+    
+    """
+     # Initialize the S3Hook
     s3_hook = S3Hook(aws_conn_id='aws_default')  # Assumes you have configured an AWS connection in Airflow
     
     # List all CSV files in the bucket/key
