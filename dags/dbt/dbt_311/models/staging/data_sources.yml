@@ -1,0 +1,7 @@
+version: 2
+sources:
+  - name: sf311
+    schema: public
+    description: Main 311 data source extracted from sfdata and migrated to s3 then postgres
+    tables:
+      - name: sfdata_311

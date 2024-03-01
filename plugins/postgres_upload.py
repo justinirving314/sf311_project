@@ -52,7 +52,32 @@ def pull_glue_table_boto(aws_access_key,
         query = f"""
             SELECT DISTINCT *
             FROM (
-                SELECT *, ROW_NUMBER() OVER() AS row_num
+                SELECT service_request_id,
+                requested_datetime,
+                closed_date,
+                updated_datetime,
+                status_description,
+                status_notes,
+                agency_responsible,
+                service_name,
+                service_subtype,
+                service_details,
+                address,
+                street,
+                supervisor_district,
+                neighborhoods_sffind_boundaries,
+                police_district,
+                point,
+                source,
+                bos_2012,
+                media_url,
+                lat,
+                long,
+                tractce,
+                name,
+                neighborhoods_analysis_boundaries,
+                __index_level_0__, 
+            ROW_NUMBER() OVER() AS row_num
                 FROM {glue_table}
             ) AS t
             WHERE t.row_num BETWEEN {offset + 1} AND {min(offset + batch_size, total_rows)}

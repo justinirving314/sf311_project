@@ -104,5 +104,31 @@ def add_tracts(df,
                            [['service_request_id','tractce','name','neighborhoods_analysis_boundaries']])
 
     df_final = pd.merge(df,df_json,on='service_request_id',how='left')
+    
+    df_final = df_final[[
+        'service_request_id',
+        'requested_datetime',
+        'closed_date',
+        'updated_datetime',
+        'status_description',
+        'status_notes',
+        'agency_responsible',
+        'service_name',
+        'service_subtype',
+        'service_details',
+        'address',
+        'street',
+        'supervisor_district',
+        'neighborhoods_sffind_boundaries',
+        'police_district',
+        'point',
+        'source',
+        'bos_2012',
+        'media_url',
+        'lat',
+        'long',
+        'tractce',
+        'name',
+        'neighborhoods_analysis_boundaries']]
 
     return df_final

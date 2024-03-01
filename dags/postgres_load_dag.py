@@ -97,7 +97,7 @@ postgres_upload_dag = DAG(
     dag_id='postgres_upload_dag',
     schedule_interval=timedelta(minutes=120),
     start_date=airflow.utils.dates.days_ago(1),
-    tags=["postgres_upload"]
+    tags=["postgres_upload"],
 )
 
 

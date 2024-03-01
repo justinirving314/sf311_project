@@ -8,6 +8,7 @@ def raw_311_preprocess(df):
     raw_311_results['lat'] = raw_311_results['lat'].astype(float)
     raw_311_results['long'] = raw_311_results['long'].astype(float)
     
+    
     # Specify the character you want to filter columns by
     character_to_filter = '@'
 
