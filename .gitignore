@@ -5,3 +5,5 @@ sfdata_311.pem
 dbt-env/
 .vscode/
 dbt_packages/
+.ipynb_checkpoints/
+.ipynb
