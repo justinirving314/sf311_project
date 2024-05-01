@@ -5,6 +5,7 @@ import sys
 import geopandas as gpd
 import json
 import cmasher as cmr
+from streamlit_plotly_events import plotly_events
 # Get the current working directory
 cwd = os.getcwd()
 # Navigate up one level in the directory hierarchy
@@ -68,7 +69,15 @@ conn = st.connection(
     url=f'postgresql://{pg_userid}:{pg_pw}@{pg_hostname}:5432/{db_name}'
 )
 
+def initialize_state():
+    for q in ['selected_locations']:
+         if f"{q}_query" not in st.session_state:
+            st.session_state[f"{q}_query"] = set()
 
+    if "counter" not in st.session_state:
+        st.session_state.counter = 0
+
+initialize_state()
 
 #import data
 df_daily = conn.query(f"select * from {daily_table_name}")
@@ -98,6 +107,9 @@ with st.sidebar:
     
     linechart_list = ['agency_categories','neighborhoods_analysis_boundaries','service_categories']
     linechart_slice = st.selectbox('Select an aggregation for linechart', linechart_list)
+
+    moving_average_list = ['Daily', '7-Day', '30-Day']
+    selected_moving_average = st.selectbox('Select a moving average for the linechart', moving_average_list)
 
 if selected_spatial_agg =='Census Tract':
     spatial_agg = 'tractce'
@@ -141,13 +153,26 @@ with col[0]:
     st.markdown('#### Total Complaints by Tract')
     tract_data = tract_df
     geodf = tract_map
-    choropleth = choropleth_map(tract_data, geodf, sum_field, spatial_agg, selected_color_theme)
-    st.plotly_chart(choropleth, use_container_width=True)
+    poly_json, choropleth = choropleth_map(tract_data, geodf, sum_field, spatial_agg, selected_color_theme)
+    # st.plotly_chart(choropleth, use_container_width=True)
+    clicked_locations = plotly_events(choropleth, 
+                                      select_event=True,
+                                      key = f"selected_locations_{st.session_state.counter}")
+    
+    current_query = {}
+    #current_query['selected_locations_query'] = {f""}
 
     st.markdown('#### Daily Complaints Over Time')
 
     line_colors = cmr.take_cmap_colors(selected_color_theme, N = len(tract_df[linechart_slice].drop_duplicates()), return_fmt='hex')
-    linechart_plt = linechart_pltly(tract_df, linechart_slice, line_colors)
+    
+    if selected_moving_average == 'Daily':
+        window_size = 1
+    elif selected_moving_average == '7-Day':
+        window_size = 7
+    else: 
+        window_size = 30
+    linechart_plt = linechart_pltly(tract_df, linechart_slice, line_colors, window_size)
     st.plotly_chart(linechart_plt, use_container_width=True)
 
 spatial_totals_sorted = spatial_agg_totals.sort_values('agg_value', ascending=False)
@@ -171,6 +196,7 @@ with col[1]:
                         max_value=max(spatial_totals_sorted['Sum Requests']),
                      )}
                  )
+    
     date_str = 'requested_date'
     xaxis_name = 'Service Category'
     yaxis_name = 'Day of Week'
@@ -181,3 +207,23 @@ with col[1]:
                                       yaxis_name)
     st.markdown('#### Daily Normalized Heatmap by Category')
     st.plotly_chart(df_daily_heatmap, use_container_width=True)
+
+
+
+
+def update_state(current_query):
+    """Stores input dict of filters into Streamlit Session State.
+
+    If one of the input filters is different from previous value in Session State, 
+    rerun Streamlit to activate the filtering and plot updating with the new info in State.
+    """
+    rerun = False
+    for q in ["bill_to_tip", "size_to_time", "day"]:
+        if current_query[f"{q}_query"] - st.session_state[f"{q}_query"]:
+            st.session_state[f"{q}_query"] = current_query[f"{q}_query"]
+            rerun = True
+
+    if rerun:
+        st.experimental_rerun()
+
+st.write(clicked_locations)
